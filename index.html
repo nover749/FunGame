@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RugSim — Mini Crypto Game</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#7c3aed;--muted:#9aa7b2;--good:#16a34a;--bad:#ef4444}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{margin:0;background:linear-gradient(180deg,#071023 0%, #081427 100%);color:#e6eef6;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .container{width:980px;max-width:100%;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);border-radius:12px;padding:20px;box-shadow:0 8px 30px rgba(2,6,23,0.6)}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    h1{font-size:20px;margin:0}
+    p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
+
+    .role-select{display:flex;gap:12px;margin:12px 0}
+    .role{flex:1;padding:14px;border-radius:10px;background:var(--card);text-align:center;cursor:pointer;border:2px solid transparent}
+    .role:hover{transform:translateY(-4px);transition:all .15s}
+    .role.active{border-color:var(--accent);box-shadow:0 6px 18px rgba(124,58,237,0.12)}
+    .role h3{margin:0 0 6px}
+    .role p{margin:0;color:var(--muted);font-size:13px}
+
+    .grid{display:grid;grid-template-columns:1fr 360px;gap:14px}
+    .card{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px}
+    .price{font-size:26px;font-weight:600}
+    .controls{display:flex;gap:8px;margin-top:10px}
+    button{background:var(--accent);color:white;border:0;padding:10px 12px;border-radius:8px;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+    .log{height:220px;overflow:auto;padding:8px;background:rgba(0,0,0,0.18);border-radius:8px;font-family:monospace;font-size:13px}
+    .stats{display:flex;flex-direction:column;gap:8px}
+    .stat-row{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
+    .chart-wrap{height:240px}
+    canvas{width:100%;height:100%;display:block;border-radius:8px;background:linear-gradient(180deg,#071026,#05101b)}
+    .big{font-size:18px}
+    .danger{background:linear-gradient(90deg,#fb7185,#ef4444);}
+    footer{margin-top:10px;color:var(--muted);font-size:12px}
+
+    @media (max-width:880px){.grid{grid-template-columns:1fr} .chart-wrap{height:180px}}
+  </style>
+</head>
+<body>
+  <div class="container" role="application">
+    <header>
+      <div>
+        <h1>RugSim — Mini Crypto Game</h1>
+        <p class="lead">Choose a role: Investor or Owner. This is a fictional game — no real money involved.</p>
+      </div>
+      <div style="text-align:right">
+        <div class="price" id="tokenTicker">$1.00</div>
+        <div style="font-size:12px;color:var(--muted)">Token: <strong>MOON</strong></div>
+      </div>
+    </header>
+
+    <div class="role-select" id="roleSelect">
+      <div class="role" id="roleInvestor">
+        <h3>Investor</h3>
+        <p>Buy low, watch price, sell at the perfect time to score big.</p>
+      </div>
+      <div class="role" id="roleOwner">
+        <h3>Owner</h3>
+        <p>Create liquidity, drive hype — or trigger a rugpull (cheeky!).</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="card">
+          <div class="chart-wrap">
+            <canvas id="priceChart"></canvas>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+            <div>
+              <div class="big">Current Price: <span id="currentPrice">$1.00</span></div>
+              <div style="color:var(--muted);font-size:13px">Price moves every second — predict/skilled timing matters.</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:13px;color:var(--muted)">Market Cap</div>
+              <div id="marketCap">$1,000,000</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div style="display:flex;gap:10px;align-items:center;justify-content:space-between">
+            <div class="stats">
+              <div class="stat-row"><div>Cash</div><div id="cash">$1000</div></div>
+              <div class="stat-row"><div>Holdings</div><div id="holdings">0 MOON</div></div>
+              <div class="stat-row"><div>Net Worth</div><div id="networth">$1000</div></div>
+            </div>
+            <div style="width:40%">
+              <div style="font-size:12px;color:var(--muted)">Role: <strong id="currentRole">—</strong></div>
+              <div style="height:8px"></div>
+              <button id="buyBtn">Buy</button>
+              <button id="sellBtn" class="secondary">Sell</button>
+            </div>
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
+            <label style="font-size:13px;color:var(--muted)">Amount:</label>
+            <input id="buyAmount" type="number" value="100" style="width:120px;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit" />
+            <button id="autoSellToggle" class="secondary">Auto-sell at peak: OFF</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:16px">Owner Controls</div>
+              <div style="color:var(--muted);font-size:13px">As owner you control token supply & liquidity (simulated).</div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--muted)">Reputation</div>
+              <div id="reputation">100</div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+            <button id="addLiquidity">Add Liquidity</button>
+            <button id="pumpBtn" class="secondary">Pump Price</button>
+            <button id="rugBtn" class="danger">Rugpull (OWNER ONLY)</button>
+            <div style="font-size:13px;color:var(--muted)">Rugpull is simulated: it will instantly drain liquidity and make price crash — investors lose simulated holdings.</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div style="font-size:14px;margin-bottom:8px">Activity Log</div>
+          <div class="log" id="log"></div>
+          <footer>All balances and actions are fictional. This demo is for entertainment/learning only.</footer>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// --- Simple simulated market engine ---
+const priceEl = document.getElementById('currentPrice');
+const tickerEl = document.getElementById('tokenTicker');
+const marketCapEl = document.getElementById('marketCap');
+const logEl = document.getElementById('log');
+const cashEl = document.getElementById('cash');
+const holdingsEl = document.getElementById('holdings');
+const netEl = document.getElementById('networth');
+const roleInvestor = document.getElementById('roleInvestor');
+const roleOwner = document.getElementById('roleOwner');
+const currentRoleEl = document.getElementById('currentRole');
+const buyBtn = document.getElementById('buyBtn');
+const sellBtn = document.getElementById('sellBtn');
+const buyAmountInput = document.getElementById('buyAmount');
+const autoSellToggle = document.getElementById('autoSellToggle');
+const addLiquidityBtn = document.getElementById('addLiquidity');
+const pumpBtn = document.getElementById('pumpBtn');
+const rugBtn = document.getElementById('rugBtn');
+const repEl = document.getElementById('reputation');
+
+let role = null;
+let price = 1.00; // starting price
+let marketCap = 1000000;
+let liquidity = 10000; // simulated liquidity pool
+let reputation = 100;
+let cash = 1000;
+let holdings = 0;
+let autoSell = false;
+let priceHistory = [];
+let lastPeakIndex = null;
+let autoSellTargetIndex = null;
+
+function log(text){
+  const time = new Date().toLocaleTimeString();
+  logEl.innerHTML = `<div>[${time}] ${text}</div>` + logEl.innerHTML;
+}
+
+function setRole(r){
+  role = r;
+  document.querySelectorAll('.role').forEach(el=>el.classList.remove('active'));
+  if(r==='investor') roleInvestor.classList.add('active');
+  if(r==='owner') roleOwner.classList.add('active');
+  currentRoleEl.textContent = r ? r.toUpperCase() : '—';
+  log(`Role selected: ${r}`);
+}
+
+roleInvestor.addEventListener('click', ()=>setRole('investor'));
+roleOwner.addEventListener('click', ()=>setRole('owner'));
+
+// Price engine: random walk with occasional pumps and noise
+function stepMarket(){
+  // base volatility scales with liquidity
+  const vol = Math.max(0.003, 0.02 * (10000 / (liquidity+5000)));
+  // random change
+  const rnd = (Math.random()*2 - 1) * vol;
+  // dampening factor
+  price = Math.max(0.0001, price * (1 + rnd));
+
+  // small chance of spontaneous pump
+  if(Math.random() < 0.03) price *= (1 + Math.random()*0.25);
+
+  // if liquidity vanished price collapses
+  if(liquidity < 50) price *= 0.02;
+
+  // record
+  priceHistory.push(price);
+  if(priceHistory.length > 200) priceHistory.shift();
+
+  // update UI
+  priceEl.textContent = `$${price.toFixed(4)}`;
+  tickerEl.textContent = `$${price.toFixed(4)}`;
+  marketCapEl.textContent = `$${Math.round(price * 1000000).toLocaleString()}`;
+  drawChart();
+
+  // detect local peak (very simple): last point greater than previous 3
+  if(priceHistory.length >= 5){
+    const L = priceHistory.length;
+    if(priceHistory[L-1] > priceHistory[L-2] && priceHistory[L-2] > priceHistory[L-3] && priceHistory[L-3] > priceHistory[L-4]){
+      lastPeakIndex = L-1;
+      // if autoSell armed, schedule immediate sell
+      if(autoSell && holdings > 0 && role==='investor'){
+        executeSell('Auto-sell (peak detected)');
+      }
+    }
+  }
+
+  updateStats();
+}
+
+function updateStats(){
+  cashEl.textContent = `$${cash.toFixed(2)}`;
+  holdingsEl.textContent = `${holdings.toFixed(4)} MOON`;
+  netEl.textContent = `$${(cash + holdings*price).toFixed(2)}`;
+  repEl.textContent = reputation;
+}
+
+function executeBuy(){
+  if(role!=='investor'){alert('Switch to Investor role to buy.');return}
+  const amount = Number(buyAmountInput.value);
+  if(!amount || amount<=0){alert('Enter positive amount to spend.');return}
+  if(amount>cash){alert('Not enough cash.');return}
+  // simple slippage based on liquidity
+  const slippage = Math.min(0.15, 0.05 + (amount / (liquidity+1000)));
+  const effectivePrice = price * (1 + slippage);
+  const tokens = amount / effectivePrice;
+  holdings += tokens;
+  cash -= amount;
+  log(`Bought ${tokens.toFixed(4)} MOON for $${amount.toFixed(2)} (slippage ${(slippage*100).toFixed(1)}%)`);
+  updateStats();
+}
+
+function executeSell(note){
+  if(role!=='investor'){alert('Switch to Investor role to sell.');return}
+  if(holdings<=0){alert('You have no holdings to sell.');return}
+  // slippage when selling
+  const value = holdings * price;
+  const slippage = Math.min(0.25, 0.06 + (holdings*price / (liquidity+1000)));
+  const proceeds = value * (1 - slippage);
+  log(`${note || 'Sold'} ${holdings.toFixed(4)} MOON for $${proceeds.toFixed(2)} (slippage ${(slippage*100).toFixed(1)}%)`);
+  cash += proceeds;
+  holdings = 0;
+  updateStats();
+}
+
+buyBtn.addEventListener('click', executeBuy);
+sellBtn.addEventListener('click', ()=>executeSell('Manual sell'));
+
+autoSellToggle.addEventListener('click', ()=>{
+  autoSell = !autoSell;
+  autoSellToggle.textContent = `Auto-sell at peak: ${autoSell? 'ON' : 'OFF'}`;
+  log(`Auto-sell ${autoSell? 'enabled' : 'disabled'}`);
+});
+
+// Owner actions
+addLiquidityBtn.addEventListener('click', ()=>{
+  if(role!=='owner'){alert('Switch to Owner role to perform this.');return}
+  const amount = 5000;
+  liquidity += amount;
+  reputation += 2;
+  log(`Owner added $${amount} liquidity. Liquidity now $${liquidity.toFixed(0)}.`);
+  updateStats();
+});
+
+pumpBtn.addEventListener('click', ()=>{
+  if(role!=='owner'){alert('Switch to Owner role to perform this.');return}
+  // pump price by injecting momentum
+  price *= 1 + 0.1 + Math.random()*0.25;
+  // small reputation cost for pump
+  reputation = Math.max(0, reputation - 1);
+  log('Owner triggered a pump. Price spiked.');
+  updateStats();
+});
+
+rugBtn.addEventListener('click', ()=>{
+  if(role!=='owner'){alert('Switch to Owner role to perform this.');return}
+  if(confirm('Rugpull is simulated. This will drain liquidity and crash the price. Proceed?')){
+    // dramatic effect: owner takes cut of liquidity, liquidity set very low, price crashes
+    const ownerTake = liquidity * (0.6 + Math.random()*0.3);
+    liquidity = Math.max(0, liquidity - ownerTake);
+    price *= 0.02; // crash to 2%
+    reputation = Math.max(0, reputation - 40);
+
+    // penalize investors: holdings become nearly worthless (simulated)
+    // we do NOT simulate theft of real funds; this is all in-game
+    log(`OWNER RUGPULL! Owner drained $${Math.round(ownerTake)} liquidity and escaped with it.`);
+    log('All investor holdings are now heavily devalued. (Simulation)');
+    updateStats();
+  }
+});
+
+// Chart drawing
+const canvas = document.getElementById('priceChart');
+const ctx = canvas.getContext('2d');
+function resize(){
+  canvas.width = canvas.clientWidth * devicePixelRatio;
+  canvas.height = canvas.clientHeight * devicePixelRatio;
+}
+window.addEventListener('resize', ()=>{resize(); drawChart();});
+resize();
+
+function drawChart(){
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  // background
+  const grad = ctx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,'rgba(124,58,237,0.12)');
+  grad.addColorStop(1,'rgba(2,6,23,0.02)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+
+  if(priceHistory.length<2) return;
+  // compute min/max
+  const minP = Math.min(...priceHistory);
+  const maxP = Math.max(...priceHistory);
+  const padding = 10 * devicePixelRatio;
+  const plotW = w - padding*2;
+  const plotH = h - padding*2;
+  ctx.beginPath();
+  for(let i=0;i<priceHistory.length;i++){
+    const x = padding + (i/(priceHistory.length-1)) * plotW;
+    const y = padding + (1 - (priceHistory[i]-minP)/(maxP-minP || 1)) * plotH;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.lineWidth = 2 * devicePixelRatio;
+  ctx.strokeStyle = '#7c3aed';
+  ctx.stroke();
+}
+
+// initialize
+log('Welcome to RugSim. Pick a role and start playing!');
+updateStats();
+for(let i=0;i<40;i++) stepMarket();
+setInterval(stepMarket, 1000);
+
+</script>
+</body>
+</html>
